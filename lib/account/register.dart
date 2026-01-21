@@ -1,8 +1,10 @@
-import 'package:aikviz/services/database_service.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
-import 'package:aikviz/services/auth_service.dart';
-import 'package:aikviz/constants.dart';
+import '../core/theme/app_colors.dart';
+import '../core/constants/app_constants.dart';
+import '../services/auth_service.dart';
+import '../services/database_service.dart';
+import '../service_locator.dart';
 
 class RegisterScreen extends StatefulWidget {
   const RegisterScreen({Key? key}) : super(key: key);
@@ -16,30 +18,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _isPasswordVisible = false;
-  String errorMessage = '';
+  bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void dispose() {
+    _usernameController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  void _register() async {
-    try {
-      final email = _emailController.text.trim();
-      final password = _passwordController.text.trim();
-      final regUsername = _usernameController.text.trim();
-      if (email.isEmpty || password.isEmpty || regUsername.isEmpty) {
-        setState(() {
-          errorMessage = 'Please enter all fields';
-        });
-        throw Exception('Please enter all fields');
-      }
-      await authService.value.register(email: email, password: password);
+  Future<void> _register() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text.trim();
+    final regUsername = _usernameController.text.trim();
 
-      await DatabaseService().create(
-        path: 'UserData',
+    if (email.isEmpty || password.isEmpty || regUsername.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter all fields';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final authService = getIt<AuthService>();
+      final databaseService = getIt<DatabaseService>();
+
+      await authService.register(email: email, password: password);
+
+      await databaseService.create(
+        path: AppConstants.userDataCollection,
         data: {
           'username': regUsername,
           'email': email,
@@ -47,29 +61,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
           'avg_score': 0.0,
           'total_correct': 0,
           'total_answers': 0,
-          'admin': false,
+          'is_admin': false,
         },
       );
 
-      authService.value.signOut();
-      Navigator.pop(context);
+      await authService.signOut();
+
+      if (mounted) {
+        Navigator.pop(context);
+      }
     } on FirebaseAuthException catch (e) {
       setState(() {
-        // Update the UI to show the error message
-        errorMessage = e.message ?? 'An error occurred during login';
+        _errorMessage = e.message ?? 'An error occurred during registration';
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'An unexpected error occurred';
+        _isLoading = false;
       });
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const primaryTextColor = Colors.white;
-    const secondaryTextColor = Color(0xffc4b5fd);
-    const primaryButtonColor = Color(0xff6a2ae5);
-    const textFieldBackgroundColor = Color(0xff271845);
-
     return Scaffold(
-      backgroundColor: primaryBackgroundColor,
+      backgroundColor: AppColors.primaryBackground,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -82,7 +99,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   'Register',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: primaryTextColor,
+                    color: AppColors.primaryText,
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                   ),
@@ -91,7 +108,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 const Text(
                   'Create an account to start your quiz journey',
                   textAlign: TextAlign.center,
-                  style: TextStyle(color: secondaryTextColor, fontSize: 16),
+                  style: TextStyle(
+                    color: AppColors.secondaryText,
+                    fontSize: 16,
+                  ),
                 ),
                 const SizedBox(height: 48),
 
@@ -99,19 +119,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 TextField(
                   controller: _usernameController,
                   keyboardType: TextInputType.text,
-                  style: const TextStyle(color: primaryTextColor),
+                  enabled: !_isLoading,
+                  style: const TextStyle(color: AppColors.primaryText),
                   decoration: InputDecoration(
                     labelText: 'Username',
-                    labelStyle: const TextStyle(color: secondaryTextColor),
+                    labelStyle: const TextStyle(color: AppColors.secondaryText),
                     filled: true,
-                    fillColor: textFieldBackgroundColor,
+                    fillColor: AppColors.textFieldBackground,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12.0),
                       borderSide: BorderSide.none,
                     ),
                     prefixIcon: const Icon(
-                      Icons.email_outlined,
-                      color: secondaryTextColor,
+                      Icons.person_outline,
+                      color: AppColors.secondaryText,
                     ),
                   ),
                 ),
@@ -121,19 +142,20 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 TextField(
                   controller: _emailController,
                   keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: primaryTextColor),
+                  enabled: !_isLoading,
+                  style: const TextStyle(color: AppColors.primaryText),
                   decoration: InputDecoration(
                     labelText: 'Email',
-                    labelStyle: const TextStyle(color: secondaryTextColor),
+                    labelStyle: const TextStyle(color: AppColors.secondaryText),
                     filled: true,
-                    fillColor: textFieldBackgroundColor,
+                    fillColor: AppColors.textFieldBackground,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12.0),
                       borderSide: BorderSide.none,
                     ),
                     prefixIcon: const Icon(
                       Icons.email_outlined,
-                      color: secondaryTextColor,
+                      color: AppColors.secondaryText,
                     ),
                   ),
                 ),
@@ -142,30 +164,30 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 // Password Text Field
                 TextField(
                   controller: _passwordController,
-                  obscureText: !_isPasswordVisible, // Hide or show password
-                  style: const TextStyle(color: primaryTextColor),
+                  obscureText: !_isPasswordVisible,
+                  enabled: !_isLoading,
+                  style: const TextStyle(color: AppColors.primaryText),
                   decoration: InputDecoration(
                     labelText: 'Password',
-                    labelStyle: const TextStyle(color: secondaryTextColor),
+                    labelStyle: const TextStyle(color: AppColors.secondaryText),
                     filled: true,
-                    fillColor: textFieldBackgroundColor,
+                    fillColor: AppColors.textFieldBackground,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12.0),
                       borderSide: BorderSide.none,
                     ),
                     prefixIcon: const Icon(
                       Icons.lock_outline,
-                      color: secondaryTextColor,
+                      color: AppColors.secondaryText,
                     ),
                     suffixIcon: IconButton(
                       icon: Icon(
                         _isPasswordVisible
                             ? Icons.visibility_off
                             : Icons.visibility,
-                        color: secondaryTextColor,
+                        color: AppColors.secondaryText,
                       ),
                       onPressed: () {
-                        // Toggle the password's visibility
                         setState(() {
                           _isPasswordVisible = !_isPasswordVisible;
                         });
@@ -173,44 +195,65 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
-                Text(errorMessage, style: TextStyle(color: Colors.red)),
+
+                if (_errorMessage.isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    _errorMessage,
+                    style: const TextStyle(color: Colors.red),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+
                 const SizedBox(height: 32),
 
                 // Register Button
                 ElevatedButton(
-                  onPressed: _register,
+                  onPressed: _isLoading ? null : _register,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryButtonColor,
+                    backgroundColor: AppColors.primaryButton,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.0),
                     ),
                   ),
-                  child: const Text(
-                    'Sign Up',
-                    style: TextStyle(fontSize: 18, color: primaryTextColor),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            valueColor: AlwaysStoppedAnimation<Color>(
+                              AppColors.primaryText,
+                            ),
+                          ),
+                        )
+                      : const Text(
+                          'Sign Up',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: AppColors.primaryText,
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 24),
 
-                // Sign Up Link
+                // Back to Login Link
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     const Text(
                       "Back to ",
-                      style: TextStyle(color: secondaryTextColor),
+                      style: TextStyle(color: AppColors.secondaryText),
                     ),
                     TextButton(
-                      onPressed: () {
-                        // Navigate to the login screen
-                        Navigator.pop(context);
-                      },
+                      onPressed: _isLoading
+                          ? null
+                          : () => Navigator.pop(context),
                       child: const Text(
                         'Log In',
                         style: TextStyle(
-                          color: primaryButtonColor,
+                          color: AppColors.primaryButton,
                           fontWeight: FontWeight.bold,
                         ),
                       ),

@@ -12,14 +12,15 @@ import '../services/achievement_service.dart';
 import '../models/achievement_model.dart';
 import '../service_locator.dart';
 
-class Quiz extends StatefulWidget {
-  const Quiz({Key? key}) : super(key: key);
+/// Survival Quiz Mode - Answer correctly in a row, lose when you answer wrong
+class SurvivalQuiz extends StatefulWidget {
+  const SurvivalQuiz({Key? key}) : super(key: key);
 
   @override
-  State<Quiz> createState() => _QuizState();
+  State<SurvivalQuiz> createState() => _SurvivalQuizState();
 }
 
-class _QuizState extends State<Quiz> {
+class _SurvivalQuizState extends State<SurvivalQuiz> {
   String? selectedAnswerIndex;
   bool answerClicked = false;
   int? _ratingChange;
@@ -27,12 +28,12 @@ class _QuizState extends State<Quiz> {
   int? _lastQuestionIndex;
   List<MapEntry<String, bool>>? _shuffledAnswers;
   List<Achievement> _newAchievements = [];
+  bool _gameOver = false;
 
   List<MapEntry<String, bool>> _getShuffledAnswers(
     Map<String, bool> answers,
     int questionIndex,
   ) {
-    // Reshuffle when moving to a new question
     if (_lastQuestionIndex != questionIndex || _shuffledAnswers == null) {
       _lastQuestionIndex = questionIndex;
       _shuffledAnswers = answers.entries.toList()..shuffle();
@@ -51,7 +52,6 @@ class _QuizState extends State<Quiz> {
           data: userProvider.getStatistics(),
         );
       } catch (e) {
-        // Log error but don't prevent navigation
         debugPrint('Failed to update user data: $e');
       }
     }
@@ -83,7 +83,7 @@ class _QuizState extends State<Quiz> {
   }
 
   void _handleAnswer(bool isCorrect, String index) {
-    if (answerClicked) return; // Prevent multiple clicks
+    if (answerClicked || _gameOver) return;
 
     setState(() {
       selectedAnswerIndex = index;
@@ -93,6 +93,14 @@ class _QuizState extends State<Quiz> {
     Future.delayed(AppConstants.answerFeedbackDuration, () {
       if (mounted) {
         final quizProvider = Provider.of<QuizProvider>(context, listen: false);
+        
+        // In survival mode, game ends if answer is wrong
+        if (quizProvider.shouldEndSurvival(isCorrect)) {
+          setState(() {
+            _gameOver = true;
+          });
+        }
+        
         quizProvider.answerQuestion(isCorrect);
 
         setState(() {
@@ -108,27 +116,24 @@ class _QuizState extends State<Quiz> {
     final quizProvider = Provider.of<QuizProvider>(context);
     final userProvider = Provider.of<UserProvider>(context, listen: false);
 
-    // Check if quiz is complete
-    if (quizProvider.isQuizComplete) {
+    // Check if game is over (wrong answer or all questions completed)
+    if (_gameOver || quizProvider.isQuizComplete) {
       final result = quizProvider.getResult();
 
-      // Update user statistics (only once, deferred to avoid setState during build)
+      // Update user statistics (only once)
       if (userProvider.isLoggedIn && !_statsUpdated) {
-        // Calculate rating change before updating
         _ratingChange = userProvider.getRatingChange(
           score: result.score,
           totalQuestions: result.totalQuestions,
         );
         _statsUpdated = true;
 
-        // Defer the state update to after the build phase
         WidgetsBinding.instance.addPostFrameCallback((_) {
           userProvider.completeQuiz(
             score: result.score,
             totalQuestions: result.totalQuestions,
           );
           _updateUserData(userProvider);
-          // Check for new achievements
           _checkAchievements(userProvider, result.score, result.totalQuestions);
         });
       }
@@ -137,6 +142,8 @@ class _QuizState extends State<Quiz> {
         quizResult: result,
         ratingChange: _ratingChange,
         newAchievements: _newAchievements,
+        gameMode: quizProvider.gameMode,
+        questionsAnswered: quizProvider.maxStreak,
       );
     }
 
@@ -156,8 +163,21 @@ class _QuizState extends State<Quiz> {
     return Scaffold(
       backgroundColor: AppColors.primaryBackground,
       appBar: AppBar(
-        title: Text(
-          "Question ${quizProvider.currentQuestionIndex + 1}/${quizProvider.totalQuestions}",
+        title: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.favorite, color: Colors.red),
+                const SizedBox(width: 8),
+                Text("Streak: ${quizProvider.streak}"),
+              ],
+            ),
+            Text(
+              "Best: ${quizProvider.maxStreak}",
+              style: const TextStyle(fontSize: 16),
+            ),
+          ],
         ),
         backgroundColor: AppColors.cardBackground,
         foregroundColor: AppColors.primaryText,
@@ -166,6 +186,31 @@ class _QuizState extends State<Quiz> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: <Widget>[
+            // Warning message
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.red.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red, width: 2),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.warning, color: Colors.red),
+                  SizedBox(width: 8),
+                  Text(
+                    'One wrong answer and you\'re out!',
+                    style: TextStyle(
+                      color: Colors.red,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 20),
             Question(currentQuestion.text),
             const SizedBox(height: 20),
             ..._getShuffledAnswers(

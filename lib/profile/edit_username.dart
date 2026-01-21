@@ -1,73 +1,90 @@
-import 'package:aikviz/constants.dart';
+import 'package:aikviz/core/theme/app_colors.dart';
+import 'package:aikviz/providers/user_provider.dart';
+import 'package:aikviz/service_locator.dart';
 import 'package:aikviz/services/database_service.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 class EditUsernameScreen extends StatefulWidget {
-  final VoidCallback onUsernameUpdated;
-
-  const EditUsernameScreen({Key? key, required this.onUsernameUpdated})
-    : super(key: key);
+  const EditUsernameScreen({super.key});
 
   @override
-  _EditUsernameScreenState createState() => _EditUsernameScreenState();
+  State<EditUsernameScreen> createState() => _EditUsernameScreenState();
 }
 
 class _EditUsernameScreenState extends State<EditUsernameScreen> {
-  // Controllers to retrieve the text from the fields
   final _newUsernameController = TextEditingController();
-  final _passwordController = TextEditingController();
-  String errorMessage = '';
+  final _databaseService = getIt<DatabaseService>();
+
+  String _errorMessage = '';
+  bool _isLoading = false;
 
   @override
   void dispose() {
-    // Clean up the controllers when the widget is disposed
     _newUsernameController.dispose();
-    _passwordController.dispose();
     super.dispose();
   }
 
-  void _updateUsername() async {
-    try {
-      final newUsername = _newUsernameController.text.trim();
+  Future<void> _updateUsername() async {
+    final newUsername = _newUsernameController.text.trim();
 
-      if (newUsername.isEmpty) {
+    if (newUsername.isEmpty) {
+      setState(() {
+        _errorMessage = 'Please enter a username';
+      });
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = '';
+    });
+
+    try {
+      final userProvider = context.read<UserProvider>();
+      final currentUser = userProvider.user;
+
+      if (currentUser == null) {
         setState(() {
-          errorMessage = 'Please enter a username';
+          _errorMessage = 'User not logged in';
+          _isLoading = false;
         });
         return;
       }
-      await DatabaseService().update(
+
+      await _databaseService.update(
         path: 'UserData',
-        id: userId,
+        id: currentUser.id,
         data: {'username': newUsername},
       );
 
-      username = newUsername; // Update the global username variable
+      // Update the user in the provider
+      userProvider.setUser(currentUser.copyWith(username: newUsername));
 
-      widget.onUsernameUpdated();
-      Navigator.pop(context);
-    } on FirebaseAuthException catch (e) {
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
       setState(() {
-        // Update the UI to show the error message
-        errorMessage = e.message ?? 'An error occurred during login';
+        _errorMessage = 'Failed to update username: ${e.toString()}';
       });
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    const primaryTextColor = Colors.white;
-    const secondaryTextColor = Color(0xffc4b5fd);
-    const primaryButtonColor = Color(0xff6a2ae5);
-    const textFieldBackgroundColor = Color(0xff271845);
-
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: primaryBackgroundColor,
-        foregroundColor: primaryTextColor,
+        backgroundColor: AppColors.primaryBackground,
+        foregroundColor: AppColors.primaryText,
       ),
-      backgroundColor: primaryBackgroundColor,
+      backgroundColor: AppColors.primaryBackground,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -80,53 +97,62 @@ class _EditUsernameScreenState extends State<EditUsernameScreen> {
                   'Enter New Username',
                   textAlign: TextAlign.center,
                   style: TextStyle(
-                    color: primaryTextColor,
+                    color: AppColors.primaryText,
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-
                 const SizedBox(height: 48),
-
-                // Email Text Field
                 TextField(
                   controller: _newUsernameController,
-                  keyboardType: TextInputType.emailAddress,
-                  style: const TextStyle(color: primaryTextColor),
+                  style: const TextStyle(color: AppColors.primaryText),
                   decoration: InputDecoration(
                     labelText: 'New Username',
-                    labelStyle: const TextStyle(color: secondaryTextColor),
+                    labelStyle: const TextStyle(color: AppColors.secondaryText),
                     filled: true,
-                    fillColor: textFieldBackgroundColor,
+                    fillColor: AppColors.textFieldBackground,
                     border: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(12.0),
                       borderSide: BorderSide.none,
                     ),
                     prefixIcon: const Icon(
                       Icons.person_outline,
-                      color: secondaryTextColor,
+                      color: AppColors.secondaryText,
                     ),
                   ),
                 ),
-
                 const SizedBox(height: 16),
-                Text(errorMessage, style: TextStyle(color: Colors.red)),
+                if (_errorMessage.isNotEmpty)
+                  Text(
+                    _errorMessage,
+                    style: const TextStyle(color: AppColors.error),
+                  ),
                 const SizedBox(height: 32),
-
-                // Login Button
                 ElevatedButton(
-                  onPressed: _updateUsername,
+                  onPressed: _isLoading ? null : _updateUsername,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: primaryButtonColor,
+                    backgroundColor: AppColors.primaryButton,
                     padding: const EdgeInsets.symmetric(vertical: 16),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12.0),
                     ),
                   ),
-                  child: const Text(
-                    'Confirm',
-                    style: TextStyle(fontSize: 18, color: primaryTextColor),
-                  ),
+                  child: _isLoading
+                      ? const SizedBox(
+                          height: 20,
+                          width: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: AppColors.primaryText,
+                          ),
+                        )
+                      : const Text(
+                          'Confirm',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: AppColors.primaryText,
+                          ),
+                        ),
                 ),
                 const SizedBox(height: 24),
               ],

@@ -1,93 +1,108 @@
 import 'package:flutter/material.dart';
-import 'quiz/result.dart';
+import 'package:provider/provider.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'home/home.dart';
 import 'profile/profile.dart';
-import './constants.dart';
-import 'package:firebase_core/firebase_core.dart';
+import 'leaderboard/leaderboard.dart';
+import 'core/theme/app_colors.dart';
 import 'firebase_options.dart';
-import 'services/auth_service.dart';
+import 'service_locator.dart';
+import 'providers/user_provider.dart';
+import 'providers/quiz_provider.dart';
+import 'providers/navigation_provider.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  await authService.value.signOut();
-  runApp(const QuizScreen());
+
+  // Initialize Firebase
+  if (Firebase.apps.isEmpty) {
+    await Firebase.initializeApp(
+      options: DefaultFirebaseOptions.currentPlatform,
+    );
+  }
+
+  // Setup dependency injection
+  await setupServiceLocator();
+
+  runApp(const QuizApp());
 }
 
-class QuizScreen extends StatefulWidget {
-  const QuizScreen({Key? key}) : super(key: key);
-
-  @override
-  State<StatefulWidget> createState() {
-    return _QuizScreenState();
-  }
-}
-
-final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
-
-class _QuizScreenState extends State<QuizScreen> {
-  void _resetQuiz() {
-    setState(() {
-      questionIndex = 0;
-      totalScore = 0;
-    });
-  }
-
-  void _answerQuestion(bool isCorrect) {
-    if (isCorrect) {
-      totalScore += 1;
-    }
-
-    setState(() {
-      questionIndex = questionIndex + 1;
-    });
-  }
+class QuizApp extends StatelessWidget {
+  const QuizApp({Key? key}) : super(key: key);
 
   @override
   Widget build(BuildContext context) {
-    Widget screenWidget = HomeScreen(
-      answerQuestion: _answerQuestion,
-      resetQuiz: _resetQuiz,
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => UserProvider()),
+        ChangeNotifierProvider(create: (_) => QuizProvider()),
+        ChangeNotifierProvider(create: (_) => NavigationProvider()),
+      ],
+      child: const QuizScreen(),
     );
+  }
+}
 
-    switch (currentScreenIndex) {
+class QuizScreen extends StatelessWidget {
+  const QuizScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'AI Quiz',
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        primaryColor: AppColors.primaryButton,
+        scaffoldBackgroundColor: AppColors.primaryBackground,
+      ),
+      home: const MainScreen(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+
+class MainScreen extends StatelessWidget {
+  const MainScreen({Key? key}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    final navigationProvider = Provider.of<NavigationProvider>(context);
+
+    Widget currentScreen;
+    switch (navigationProvider.currentIndex) {
       case 0:
-        screenWidget = HomeScreen(
-          answerQuestion: _answerQuestion,
-          resetQuiz: _resetQuiz,
-        );
+        currentScreen = const HomeScreen();
+        break;
       case 1:
-        screenWidget = ProfileScreen();
+        currentScreen = const LeaderboardScreen();
+        break;
+      case 2:
+        currentScreen = const ProfileScreen();
+        break;
+      default:
+        currentScreen = const HomeScreen();
     }
 
-    return MaterialApp(
-      navigatorKey: navigatorKey,
-      home: Scaffold(
-        backgroundColor: primaryBackgroundColor,
-        bottomNavigationBar: BottomNavigationBar(
-          currentIndex: currentScreenIndex > 1 ? 0 : currentScreenIndex,
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: cardBackgroundColor,
-          selectedItemColor: selectedItemColor,
-          unselectedItemColor: secondaryTextColor,
-          showUnselectedLabels: true,
-          items: const [
-            BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
-            BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
-          ],
-          onTap: (value) {
-            setState(() {
-              currentScreenIndex = value;
-            });
-          },
-        ),
-        body: screenWidget,
+    return Scaffold(
+      backgroundColor: AppColors.primaryBackground,
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: navigationProvider.currentIndex,
+        type: BottomNavigationBarType.fixed,
+        backgroundColor: AppColors.cardBackground,
+        selectedItemColor: AppColors.selectedItem,
+        unselectedItemColor: AppColors.secondaryText,
+        showUnselectedLabels: true,
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home), label: "Home"),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.leaderboard),
+            label: "Leaderboard",
+          ),
+          BottomNavigationBarItem(icon: Icon(Icons.person), label: "Profile"),
+        ],
+        onTap: (index) => navigationProvider.setIndex(index),
       ),
-      routes: <String, WidgetBuilder>{
-        '/results': (BuildContext context) =>
-            Result(totalScore, questions.length, _resetQuiz),
-      },
-      debugShowCheckedModeBanner: false,
+      body: currentScreen,
     );
   }
 }
