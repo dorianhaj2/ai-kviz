@@ -11,13 +11,14 @@ class EmbeddingService {
   
   Future<List<double>> generateEmbedding(String text) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/models/text-embedding-004:embedContent?key=$apiKey'),
+      Uri.parse('$baseUrl/models/gemini-embedding-001:embedContent?key=$apiKey'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'model': 'models/text-embedding-004',
+        'model': 'models/gemini-embedding-001',
         'content': {
           'parts': [{'text': text}]
-        }
+        },
+        'outputDimensionality': 768
       }),
     );
     

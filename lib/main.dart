@@ -14,14 +14,12 @@ import 'providers/navigation_provider.dart';
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Initialize Firebase
   if (Firebase.apps.isEmpty) {
     await Firebase.initializeApp(
       options: DefaultFirebaseOptions.currentPlatform,
     );
   }
 
-  // Setup dependency injection
   await setupServiceLocator();
 
   runApp(const QuizApp());

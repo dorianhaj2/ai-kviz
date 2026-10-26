@@ -6,6 +6,7 @@ import '../models/achievement_model.dart';
 import '../models/game_mode.dart';
 import '../providers/quiz_provider.dart';
 import '../providers/user_provider.dart';
+import 'quiz_review.dart';
 
 class Result extends StatelessWidget {
   final QuizResult quizResult;
@@ -26,7 +27,10 @@ class Result extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final userProvider = Provider.of<UserProvider>(context);
-    final totalQuestions = gameMode == GameMode.timed || gameMode == GameMode.survival ? questionsAnswered : quizResult.totalQuestions;
+    final totalQuestions =
+        gameMode == GameMode.timed || gameMode == GameMode.survival
+        ? questionsAnswered
+        : quizResult.totalQuestions;
     final double percentageScore = totalQuestions != null && totalQuestions > 0
         ? quizResult.score / totalQuestions
         : 0.0;
@@ -76,7 +80,7 @@ class Result extends StatelessWidget {
             ),
 
             const SizedBox(height: 30),
-            
+
             const Text(
               'You have successfully completed the quiz.',
               style: TextStyle(fontSize: 16, color: AppColors.secondaryText),
@@ -96,6 +100,34 @@ class Result extends StatelessWidget {
             ],
 
             const SizedBox(height: 40),
+
+            // Review Answers button
+            ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (context) => const QuizReview()),
+                );
+              },
+              icon: const Icon(Icons.list_alt),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.cardBackground,
+                foregroundColor: AppColors.primaryText,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 40,
+                  vertical: 16,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(15.0),
+                ),
+              ),
+              label: const Text(
+                'Review Answers',
+                style: TextStyle(fontSize: 18),
+              ),
+            ),
+
+            const SizedBox(height: 16),
 
             // Back to home button
             ElevatedButton(

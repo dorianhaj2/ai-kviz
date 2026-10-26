@@ -12,15 +12,16 @@ class GeminiService {
   /// Generate embedding for text using Gemini
   Future<List<double>> generateEmbedding(String text) async {
     final response = await http.post(
-      Uri.parse('$baseUrl/models/text-embedding-004:embedContent?key=$apiKey'),
+      Uri.parse('$baseUrl/models/gemini-embedding-001:embedContent?key=$apiKey'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
-        'model': 'models/text-embedding-004',
+        'model': 'models/gemini-embedding-001',
         'content': {
           'parts': [
             {'text': text},
           ],
         },
+        'outputDimensionality': 768
       }),
     );
 
@@ -98,7 +99,7 @@ Make questions diverse and educational. Ensure answers are clearly right or wron
         gemini-2.0-flash
         gemini-2.0-flash-lite
       */
-      Uri.parse('$baseUrl/models/gemini-3-flash-preview:generateContent?key=$apiKey'),
+      Uri.parse('$baseUrl/models/gemini-2.5-flash:generateContent?key=$apiKey'),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode({
         'contents': [

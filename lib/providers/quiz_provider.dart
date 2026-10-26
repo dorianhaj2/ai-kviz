@@ -4,7 +4,7 @@ import '../models/quiz_result.dart';
 import '../models/game_mode.dart';
 
 /// Provider for managing quiz state throughout the application
-class QuizProvider with   ChangeNotifier {
+class QuizProvider with ChangeNotifier {
   List<Question> _questions = [];
   int _currentQuestionIndex = 0;
   int _score = 0;
@@ -12,13 +12,18 @@ class QuizProvider with   ChangeNotifier {
   String _currentDifficulty = '';
   bool _isLoading = false;
   GameMode _gameMode = GameMode.normal;
-  
+
   // Survival mode specific
   int _streak = 0;
   int _maxStreak = 0;
-  
+
   // Timed mode specific
   int _questionsAnsweredInTime = 0;
+
+  // Track which questions have been answered and if they were correct
+  Map<int, bool> _answeredQuestions = {};
+  // Track the selected answer text for each question
+  Map<int, String> _selectedAnswers = {};
 
   // Getters
   List<Question> get questions => _questions;
@@ -31,6 +36,8 @@ class QuizProvider with   ChangeNotifier {
   int get streak => _streak;
   int get maxStreak => _maxStreak;
   int get questionsAnsweredInTime => _questionsAnsweredInTime;
+  Map<int, bool> get answeredQuestions => _answeredQuestions;
+  Map<int, String> get selectedAnswers => _selectedAnswers;
 
   Question? get currentQuestion {
     if (_currentQuestionIndex < _questions.length) {
@@ -42,6 +49,10 @@ class QuizProvider with   ChangeNotifier {
   bool get isQuizComplete => _currentQuestionIndex >= _questions.length;
   int get totalQuestions => _questions.length;
   int get questionsRemaining => _questions.length - _currentQuestionIndex;
+  bool get canGoBack => _currentQuestionIndex > 0;
+  bool get canGoForward => _currentQuestionIndex < _questions.length - 1;
+  bool get hasAnsweredCurrentQuestion =>
+      _answeredQuestions.containsKey(_currentQuestionIndex);
 
   /// Sets loading state
   void setLoading(bool loading) {
@@ -66,6 +77,8 @@ class QuizProvider with   ChangeNotifier {
     _streak = 0;
     _maxStreak = 0;
     _questionsAnsweredInTime = 0;
+    _answeredQuestions = {};
+    _selectedAnswers = {};
     notifyListeners();
   }
 
@@ -77,30 +90,86 @@ class QuizProvider with   ChangeNotifier {
 
   /// Answers the current question and moves to next
   void answerQuestion(bool isCorrect) {
-    if (isCorrect) {
-      _score++;
-      _streak++;
-      if (_streak > _maxStreak) {
-        _maxStreak = _streak;
+    // Only update score if this question hasn't been answered before
+    if (!_answeredQuestions.containsKey(_currentQuestionIndex)) {
+      if (isCorrect) {
+        _score++;
+        _streak++;
+        if (_streak > _maxStreak) {
+          _maxStreak = _streak;
+        }
+      } else {
+        _streak = 0;
       }
-    } else {
-      _streak = 0;
+
+      // For timed mode, track questions answered
+      if (_gameMode == GameMode.timed) {
+        _questionsAnsweredInTime++;
+      }
     }
-    
-    // For timed mode, track questions answered
-    if (_gameMode == GameMode.timed) {
-      _questionsAnsweredInTime++;
-    }
-    
+
+    // Track the answer
+    _answeredQuestions[_currentQuestionIndex] = isCorrect;
+
     _currentQuestionIndex++;
     notifyListeners();
   }
-  
+
+  /// Navigate to next question without answering
+  void nextQuestion() {
+    if (_currentQuestionIndex < _questions.length) {
+      _currentQuestionIndex++;
+      notifyListeners();
+    }
+  }
+
+  /// Navigate to previous question
+  void previousQuestion() {
+    if (canGoBack) {
+      _currentQuestionIndex--;
+      notifyListeners();
+    }
+  }
+
+  /// Skip to a specific question index
+  void goToQuestion(int index) {
+    if (index >= 0 && index < _questions.length) {
+      _currentQuestionIndex = index;
+      notifyListeners();
+    }
+  }
+
+  /// Submit answer without auto-advancing
+  void submitAnswer(bool isCorrect, String selectedAnswerText) {
+    // Only update score if this question hasn't been answered before
+    if (!_answeredQuestions.containsKey(_currentQuestionIndex)) {
+      if (isCorrect) {
+        _score++;
+        _streak++;
+        if (_streak > _maxStreak) {
+          _maxStreak = _streak;
+        }
+      } else {
+        _streak = 0;
+      }
+
+      // For timed mode, track questions answered
+      if (_gameMode == GameMode.timed) {
+        _questionsAnsweredInTime++;
+      }
+    }
+
+    // Track the answer and the selected text
+    _answeredQuestions[_currentQuestionIndex] = isCorrect;
+    _selectedAnswers[_currentQuestionIndex] = selectedAnswerText;
+    notifyListeners();
+  }
+
   /// Check if survival mode should end (wrong answer)
   bool shouldEndSurvival(bool isCorrect) {
     return _gameMode == GameMode.survival && !isCorrect;
   }
-  
+
   /// Add more questions (for timed mode)
   void addQuestions(List<Question> newQuestions) {
     _questions.addAll(newQuestions);
@@ -119,6 +188,8 @@ class QuizProvider with   ChangeNotifier {
     _streak = 0;
     _maxStreak = 0;
     _questionsAnsweredInTime = 0;
+    _answeredQuestions = {};
+    _selectedAnswers = {};
     notifyListeners();
   }
 
